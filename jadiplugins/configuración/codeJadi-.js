@@ -64,7 +64,7 @@ export default {
                 'https://tewianix.org'
 
             const previewImage =
-                'https://files.catbox.moe/fhnqaa.jpg'
+                'https://files.catbox.moe/rdn7sk.jpg'
 
             let linkPreview = null
 
