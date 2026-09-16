@@ -18,73 +18,279 @@ async function streamToBuffer(stream) {
     return buffer
 }
 
-function convertToWebp(inputPath, isVideo) {
-    return new Promise((resolve, reject) => {
-        const tmpDir = path.join(
-            process.cwd(),
-            'tmp'
-        )
+function addExif(webpBuffer, packname, author) {
+    const json = {
+        'sticker-pack-id': 'com.whatsapp.sticker.jadibot',
+        'sticker-pack-name': packname,
+        'sticker-pack-publisher': author,
+        'emojis': ['']
+    }
 
-        if (!fs.existsSync(tmpDir)) {
-            fs.mkdirSync(
-                tmpDir,
-                {
-                    recursive: true
-                }
+    const jsonBuffer = Buffer.from(
+        JSON.stringify(json),
+        'utf8'
+    )
+
+    const exifHeader = Buffer.from([
+        0x49, 0x49, 0x2A, 0x00,
+        0x08, 0x00, 0x00, 0x00,
+        0x01, 0x00,
+        0x41, 0x57,
+        0x07, 0x00,
+        0x00, 0x00,
+        0x00, 0x00,
+        0x00, 0x00
+    ])
+
+    const exifBuffer = Buffer.concat([
+        exifHeader,
+        jsonBuffer
+    ])
+
+    exifBuffer.writeUInt32LE(
+        jsonBuffer.length,
+        14
+    )
+
+    if (
+        webpBuffer.toString(
+            'ascii',
+            0,
+            4
+        ) !== 'RIFF'
+    ) {
+        throw new Error(
+            'El archivo generado no es un WebP válido.'
+        )
+    }
+
+    if (
+        webpBuffer.toString(
+            'ascii',
+            8,
+            12
+        ) !== 'WEBP'
+    ) {
+        throw new Error(
+            'El archivo generado no contiene un contenedor WEBP válido.'
+        )
+    }
+
+    const chunks = []
+
+    let offset = 12
+
+    while (
+        offset + 8 <= webpBuffer.length
+    ) {
+        const chunkType =
+            webpBuffer.toString(
+                'ascii',
+                offset,
+                offset + 4
             )
+
+        const chunkSize =
+            webpBuffer.readUInt32LE(
+                offset + 4
+            )
+
+        const totalSize =
+            8 +
+            chunkSize +
+            (chunkSize % 2)
+
+        if (
+            offset + totalSize >
+            webpBuffer.length
+        ) {
+            break
         }
 
-        const tmpOutput = path.join(
-            tmpDir,
-            `${Date.now()}_sticker.webp`
+        chunks.push(
+            webpBuffer.subarray(
+                offset,
+                offset + totalSize
+            )
         )
 
-        const options = isVideo
-            ? [
-                '-vcodec',
-                'libwebp',
+        offset += totalSize
+    }
 
-                '-vf',
-                'scale=320:320:force_original_aspect_ratio=decrease,fps=10,pad=320:320:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
+    const exifSize =
+        exifBuffer.length
 
-                '-loop',
-                '0',
+    const paddedSize =
+        exifSize % 2 === 0
+            ? exifSize
+            : exifSize + 1
 
-                '-ss',
-                '00:00:00',
+    const exifChunk =
+        Buffer.alloc(
+            8 + paddedSize
+        )
 
-                '-t',
-                '00:00:06',
+    exifChunk.write(
+        'EXIF',
+        0,
+        4,
+        'ascii'
+    )
 
-                '-preset',
-                'default',
+    exifChunk.writeUInt32LE(
+        exifSize,
+        4
+    )
 
-                '-an',
+    exifBuffer.copy(
+        exifChunk,
+        8
+    )
 
-                '-vsync',
-                '0'
-            ]
-            : [
-                '-vcodec',
-                'libwebp',
+    const newBody =
+        Buffer.concat([
+            Buffer.from('WEBP', 'ascii'),
+            ...chunks,
+            exifChunk
+        ])
 
-                '-vf',
-                'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=0x00000000',
+    const newRiff =
+        Buffer.alloc(8)
 
-                '-preset',
-                'default'
-            ]
+    newRiff.write(
+        'RIFF',
+        0,
+        4,
+        'ascii'
+    )
 
-        ffmpeg(inputPath)
-            .outputOptions(options)
-            .toFormat('webp')
-            .save(tmpOutput)
-            .on('end', () => {
-                try {
-                    const resultBuffer =
-                        fs.readFileSync(
-                            tmpOutput
+    newRiff.writeUInt32LE(
+        newBody.length,
+        4
+    )
+
+    return Buffer.concat([
+        newRiff,
+        newBody
+    ])
+}
+
+function convertToWebp(
+    inputPath,
+    isVideo
+) {
+    return new Promise(
+        (resolve, reject) => {
+
+            const tmpDir =
+                path.join(
+                    process.cwd(),
+                    'tmp'
+                )
+
+            if (
+                !fs.existsSync(
+                    tmpDir
+                )
+            ) {
+                fs.mkdirSync(
+                    tmpDir,
+                    {
+                        recursive: true
+                    }
+                )
+            }
+
+            const tmpOutput =
+                path.join(
+                    tmpDir,
+                    `${Date.now()}_sticker.webp`
+                )
+
+            const options = isVideo
+                ? [
+                    '-vcodec',
+                    'libwebp',
+
+                    '-vf',
+                    'scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,fps=10,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+
+                    '-pix_fmt',
+                    'yuva420p',
+
+                    '-lossless',
+                    '1',
+
+                    '-loop',
+                    '0',
+
+                    '-ss',
+                    '00:00:00',
+
+                    '-t',
+                    '00:00:07',
+
+                    '-preset',
+                    'picture',
+
+                    '-an',
+
+                    '-vsync',
+                    '0'
+                ]
+                : [
+                    '-vcodec',
+                    'libwebp',
+
+                    '-vf',
+                    'scale=512:512:force_original_aspect_ratio=decrease:flags=lanczos,pad=512:512:(ow-iw)/2:(oh-ih)/2:color=black@0',
+
+                    '-pix_fmt',
+                    'yuva420p',
+
+                    '-lossless',
+                    '1',
+
+                    '-preset',
+                    'picture',
+
+                    '-an'
+                ]
+
+            ffmpeg(inputPath)
+                .outputOptions(
+                    options
+                )
+                .toFormat('webp')
+                .save(tmpOutput)
+                .on('end', () => {
+
+                    try {
+
+                        const resultBuffer =
+                            fs.readFileSync(
+                                tmpOutput
+                            )
+
+                        if (
+                            fs.existsSync(
+                                tmpOutput
+                            )
+                        ) {
+                            fs.unlinkSync(
+                                tmpOutput
+                            )
+                        }
+
+                        resolve(
+                            resultBuffer
                         )
+
+                    } catch (error) {
+                        reject(error)
+                    }
+                })
+                .on('error', error => {
 
                     if (
                         fs.existsSync(
@@ -96,27 +302,10 @@ function convertToWebp(inputPath, isVideo) {
                         )
                     }
 
-                    resolve(
-                        resultBuffer
-                    )
-                } catch (error) {
                     reject(error)
-                }
-            })
-            .on('error', error => {
-                if (
-                    fs.existsSync(
-                        tmpOutput
-                    )
-                ) {
-                    fs.unlinkSync(
-                        tmpOutput
-                    )
-                }
-
-                reject(error)
-            })
-    })
+                })
+        }
+    )
 }
 
 function getBotJid(conn) {
@@ -162,6 +351,41 @@ function getStickerAuthor(conn) {
             : '🍃'
 
     return `${name} | ${emoji}`
+}
+
+async function react(
+    m,
+    conn,
+    text
+) {
+    try {
+
+        if (
+            typeof m?.react ===
+            'function'
+        ) {
+            return await m.react(
+                text
+            )
+        }
+
+        if (
+            conn?.sendMessage &&
+            m?.chat &&
+            m?.key
+        ) {
+            return await conn.sendMessage(
+                m.chat,
+                {
+                    react: {
+                        text,
+                        key: m.key
+                    }
+                }
+            )
+        }
+
+    } catch {}
 }
 
 export default {
@@ -222,12 +446,14 @@ export default {
             ) > 7
         ) {
             return m.reply(
-                '*El video no puede durar más de 7 segundos*'
+                '*El video no puede durar más de 7 segundos.*'
             )
         }
 
-        await m.reply(
-            '*Enviando sticker*'
+        await react(
+            m,
+            conn,
+            '🕗'
         )
 
         const tmpDir =
@@ -268,7 +494,9 @@ export default {
             try {
 
                 const streamType =
-                    mime.split('/')[0]
+                    mime.startsWith('video')
+                        ? 'video'
+                        : 'image'
 
                 const stream =
                     await downloadContentFromMessage(
@@ -325,26 +553,33 @@ export default {
                 )
             }
 
-            const author =
+            const stickerInfo =
                 getStickerAuthor(
                     conn
                 )
 
-            return await conn.sendMessage(
+            const finalWebp =
+                addExif(
+                    webpBuffer,
+                    stickerInfo,
+                    ''
+                )
+
+            await conn.sendMessage(
                 m.chat,
                 {
                     sticker:
-                        webpBuffer,
-
-                    packname:
-                        author,
-
-                    author:
-                        ''
+                        finalWebp
                 },
                 {
                     quoted: m
                 }
+            )
+
+            await react(
+                m,
+                conn,
+                '✅'
             )
 
         } catch (error) {
@@ -364,8 +599,14 @@ export default {
                 error
             )
 
+            await react(
+                m,
+                conn,
+                '❌'
+            )
+
             return m.reply(
-                '*Ocurrio un error*\n\n' +
+                '*Ocurrio un error al crear el sticker.*\n\n' +
                 `Detalle: ${error.message || error}`
             )
         }
