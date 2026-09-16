@@ -382,7 +382,7 @@ export default {
 
         const botImage =
             botConfig?.mediaUrl ||
-            'https://files.catbox.moe/fhnqaa.jpg'
+            'https://files.catbox.moe/rdn7sk.jpg'
 
         const argumentos =
             Array.isArray(args)
