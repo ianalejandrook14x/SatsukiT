@@ -166,8 +166,7 @@ export default {
                     conn,
                     m,
                     data,
-                    emoji,
-                    hd
+                    emoji
                 )
             } else if (
                 service.type === 'spotify'
