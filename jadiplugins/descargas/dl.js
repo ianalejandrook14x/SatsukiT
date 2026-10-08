@@ -7,7 +7,7 @@ export default {
         'dl'
     ],
 
-    async execute(m, { conn, text }) {
+    async run(m, { conn, args, text }) {
         const botJid =
             conn?.subBotJid ||
             conn?.user?.jid ||
@@ -18,22 +18,26 @@ export default {
             getSubbotConfig(botJid)
 
         const emoji =
-            String(
-                botConfig?.emoji ||
-                '🍃'
-            ).trim()
+            typeof botConfig?.emoji === 'string' &&
+            botConfig.emoji.trim()
+                ? botConfig.emoji.trim()
+                : '🍃'
 
         try {
-            if (!text?.trim()) {
+            const input =
+                Array.isArray(args) && args.length
+                    ? args.join(' ').trim()
+                    : typeof text === 'string'
+                        ? text.trim()
+                        : ''
+
+            if (!input) {
                 return await sendDownloadMenu(
                     m,
                     conn,
                     botConfig
                 )
             }
-
-            const input =
-                text.trim()
 
             const urlMatch =
                 input.match(
@@ -41,17 +45,20 @@ export default {
                 )
 
             if (!urlMatch) {
-                return await sendDownloadMenu(
-                    m,
+                await react(
                     conn,
-                    botConfig
+                    m,
+                    '❌'
+                )
+
+                return m.reply(
+                    `${emoji} Debes proporcionar una URL válida.`
                 )
             }
 
             const originalUrl =
-                urlMatch[0].replace(
-                    /[)>]+$/,
-                    ''
+                cleanUrl(
+                    urlMatch[0]
                 )
 
             const service =
@@ -80,28 +87,75 @@ export default {
             const apiUrl =
                 `${service.api}?url=${encodeURIComponent(originalUrl)}`
 
+            console.log(
+                `[DL] ${service.name}: ${originalUrl}`
+            )
+
+            console.log(
+                `[DL] API: ${apiUrl}`
+            )
+
             const response =
                 await fetch(
                     apiUrl,
                     {
                         method: 'GET',
+
                         headers: {
                             Accept:
                                 'application/json',
+
                             'User-Agent':
                                 'Mozilla/5.0'
-                        }
+                        },
+
+                        signal:
+                            AbortSignal.timeout(
+                                60000
+                            )
                     }
                 )
 
+            const contentType =
+                response.headers.get(
+                    'content-type'
+                ) || ''
+
+            const responseText =
+                await response.text()
+
             if (!response.ok) {
                 throw new Error(
-                    `HTTP ${response.status}`
+                    `La API respondió HTTP ${response.status}.`
                 )
             }
 
-            const data =
-                await response.json()
+            if (
+                !contentType.includes(
+                    'application/json'
+                )
+            ) {
+                throw new Error(
+                    `La API no devolvió JSON. Respuesta: ${responseText.slice(0, 300)}`
+                )
+            }
+
+            let data
+
+            try {
+                data =
+                    JSON.parse(
+                        responseText
+                    )
+            } catch {
+                throw new Error(
+                    'La respuesta de la API no contiene un JSON válido.'
+                )
+            }
+
+            console.log(
+                '[DL] Respuesta recibida'
+            )
 
             if (
                 data?.status === false ||
@@ -145,9 +199,13 @@ export default {
                 '✅'
             )
 
+            console.log(
+                `[DL] ${service.name}: descarga completada`
+            )
+
         } catch (error) {
             console.error(
-                '[DL]',
+                '[DL ERROR]',
                 error
             )
 
@@ -181,10 +239,10 @@ async function sendDownloadMenu(
         'sᥲtsυkι tᥲᥴhιbᥲᥒᥲ'
 
     const emoji =
-        String(
-            botConfig?.emoji ||
-            '🍃'
-        ).trim()
+        typeof botConfig?.emoji === 'string' &&
+        botConfig.emoji.trim()
+            ? botConfig.emoji.trim()
+            : '🍃'
 
     const previewUrl =
         'https://tewianix.org'
@@ -205,11 +263,19 @@ async function sendDownloadMenu(
     try {
         const imageResponse =
             await fetch(
-                previewImage
+                previewImage,
+                {
+                    signal:
+                        AbortSignal.timeout(
+                            15000
+                        )
+                }
             )
 
         if (!imageResponse.ok) {
-            throw new Error()
+            throw new Error(
+                `HTTP ${imageResponse.status}`
+            )
         }
 
         const originalBuffer =
@@ -243,6 +309,7 @@ async function sendDownloadMenu(
                 {
                     upload:
                         conn.waUploadToServer,
+
                     mediaTypeOverride:
                         'thumbnail-link'
                 }
@@ -287,7 +354,12 @@ async function sendDownloadMenu(
             }
         }
 
-    } catch {}
+    } catch (error) {
+        console.error(
+            '[DL PREVIEW]',
+            error
+        )
+    }
 
     if (linkPreview) {
         return conn.sendMessage(
@@ -299,7 +371,8 @@ async function sendDownloadMenu(
                 linkPreview
             },
             {
-                quoted: m
+                quoted:
+                    m
             }
         )
     }
@@ -319,13 +392,27 @@ async function react(
         {
             react: {
                 text,
-                key: m.key
+                key:
+                    m.key
             }
         }
     )
 }
 
-function detectService(url) {
+function cleanUrl(
+    url
+) {
+    return String(url)
+        .replace(
+            /[)>]+$/,
+            ''
+        )
+        .trim()
+}
+
+function detectService(
+    url
+) {
     let hostname
 
     try {
@@ -333,20 +420,22 @@ function detectService(url) {
             new URL(url)
                 .hostname
                 .toLowerCase()
-                .replace(
-                    /^www\./,
-                    ''
-                )
     } catch {
         return null
     }
 
+    hostname =
+        hostname.replace(
+            /^www\./,
+            ''
+        )
+
     if (
+        hostname === 'open.spotify.com' ||
         hostname === 'spotify.com' ||
         hostname.endsWith(
             '.spotify.com'
-        ) ||
-        hostname === 'open.spotify.com'
+        )
     ) {
         return {
             type:
@@ -479,22 +568,19 @@ function normalizeResult(
         ''
 
     if (
-        type === 'facebook'
+        type === 'facebook' &&
+        Array.isArray(
+            data?.list
+        )
     ) {
-        const list =
-            Array.isArray(
-                data?.list
-            )
-                ? data.list
-                : []
-
         for (
-            const item of list
+            const item of
+                data.list
         ) {
             if (
-                item?.url &&
-                typeof item.url ===
-                    'string'
+                typeof item?.url ===
+                'string' &&
+                isUrl(item.url)
             ) {
                 videos.push(
                     item.url
@@ -518,8 +604,7 @@ function normalizeResult(
                     'audio_url',
                     'music',
                     'musicUrl',
-                    'music_url',
-                    'url'
+                    'music_url'
                 ]
             )
 
@@ -579,44 +664,15 @@ async function sendSpotify(
                 : ''
         )
 
-    const image =
-        result.image
-
-    if (image) {
-        try {
-            await conn.sendMessage(
-                m.chat,
-                {
-                    image: {
-                        url:
-                            image
-                    },
-                    caption
-                },
-                {
-                    quoted:
-                        m
-                }
-            )
-        } catch {
-            await conn.sendMessage(
-                m.chat,
-                {
-                    text:
-                        caption
-                },
-                {
-                    quoted:
-                        m
-                }
-            )
-        }
-    } else {
+    if (result.image) {
         await conn.sendMessage(
             m.chat,
             {
-                text:
-                    caption
+                image: {
+                    url:
+                        result.image
+                },
+                caption
             },
             {
                 quoted:
@@ -638,7 +694,8 @@ async function sendSpotify(
                 'audio_url',
                 'music',
                 'musicUrl',
-                'music_url'
+                'music_url',
+                'url'
             ]
         )
 
@@ -655,8 +712,10 @@ async function sendSpotify(
                 url:
                     audio
             },
+
             mimetype:
                 'audio/mpeg',
+
             fileName:
                 `${sanitizeFileName(title)}.mp3`
         },
@@ -681,12 +740,17 @@ async function sendSocialMedia(
             emoji
         )
 
+    const videos =
+        unique(
+            result.videos
+        )
+
     if (
-        result.videos.length > 0
+        videos.length > 0
     ) {
         for (
             const video of
-                result.videos
+                videos
         ) {
             await conn.sendMessage(
                 m.chat,
@@ -695,7 +759,9 @@ async function sendSocialMedia(
                         url:
                             video
                     },
+
                     caption,
+
                     mimetype:
                         'video/mp4'
                 },
@@ -735,7 +801,9 @@ async function sendSocialMedia(
                     url:
                         video
                 },
+
                 caption,
+
                 mimetype:
                     'video/mp4'
             },
@@ -748,35 +816,26 @@ async function sendSocialMedia(
         return
     }
 
-    const mediaImages =
-        result.images.length
-            ? result.images
-            : result.image
-                ? [result.image]
-                : []
+    const image =
+        result.image ||
+        result.images[0]
 
-    if (
-        mediaImages.length > 0
-    ) {
-        for (
-            const image of
-                mediaImages
-        ) {
-            await conn.sendMessage(
-                m.chat,
-                {
-                    image: {
-                        url:
-                            image
-                    },
-                    caption
+    if (image) {
+        await conn.sendMessage(
+            m.chat,
+            {
+                image: {
+                    url:
+                        image
                 },
-                {
-                    quoted:
-                        m
-                }
-            )
-        }
+
+                caption
+            },
+            {
+                quoted:
+                    m
+            }
+        )
 
         return
     }
@@ -795,7 +854,9 @@ async function sendSocialMedia(
                     url:
                         generic
                 },
+
                 caption,
+
                 mimetype:
                     'video/mp4'
             },
@@ -809,7 +870,7 @@ async function sendSocialMedia(
     }
 
     throw new Error(
-        'No se encontro archivo multimedia'
+        'No se encontro archivo multimedia en la respuesta de la API.'
     )
 }
 
@@ -858,7 +919,9 @@ function collectValues(
         'string'
     ) {
         if (isUrl(value)) {
-            urls.push(value)
+            urls.push(
+                value
+            )
 
             const lower =
                 key.toLowerCase()
@@ -878,7 +941,9 @@ function collectValues(
                     'thumbnail'
                 )
             ) {
-                images.push(value)
+                images.push(
+                    value
+                )
             }
 
             if (
@@ -890,7 +955,9 @@ function collectValues(
                     'music'
                 )
             ) {
-                audios.push(value)
+                audios.push(
+                    value
+                )
             }
 
             if (
@@ -902,7 +969,9 @@ function collectValues(
                     'play'
                 )
             ) {
-                videos.push(value)
+                videos.push(
+                    value
+                )
             }
         }
 
@@ -913,7 +982,8 @@ function collectValues(
         Array.isArray(value)
     ) {
         for (
-            const item of value
+            const item of
+                value
         ) {
             collectValues(
                 item,
@@ -973,7 +1043,8 @@ function findMediaByKeys(
         Array.isArray(object)
     ) {
         for (
-            const item of object
+            const item of
+                object
         ) {
             const found =
                 findMediaByKeys(
@@ -997,7 +1068,8 @@ function findMediaByKeys(
     }
 
     for (
-        const key of keys
+        const key of
+            keys
     ) {
         const value =
             object[key]
@@ -1013,7 +1085,9 @@ function findMediaByKeys(
 
     for (
         const value of
-            Object.values(object)
+            Object.values(
+                object
+            )
     ) {
         const found =
             findMediaByKeys(
@@ -1048,7 +1122,8 @@ function firstValue(
         Array.isArray(object)
     ) {
         for (
-            const item of object
+            const item of
+                object
         ) {
             const found =
                 firstValue(
@@ -1072,7 +1147,8 @@ function firstValue(
     }
 
     for (
-        const key of keys
+        const key of
+            keys
     ) {
         const value =
             object[key]
@@ -1086,8 +1162,9 @@ function firstValue(
         }
 
         if (
+            value &&
             typeof value ===
-            'object'
+                'object'
         ) {
             const found =
                 firstValue(
@@ -1103,11 +1180,14 @@ function firstValue(
 
     for (
         const value of
-            Object.values(object)
+            Object.values(
+                object
+            )
     ) {
         if (
+            value &&
             typeof value ===
-            'object'
+                'object'
         ) {
             const found =
                 firstValue(
@@ -1124,13 +1204,17 @@ function firstValue(
     return ''
 }
 
-function isUrl(value) {
+function isUrl(
+    value
+) {
     return /^https?:\/\/\S+$/i.test(
         value
     )
 }
 
-function isVideoUrl(url) {
+function isVideoUrl(
+    url
+) {
     return (
         /\.(mp4|m4v|mov|webm)(\?|$)/i
             .test(url) ||
@@ -1139,7 +1223,9 @@ function isVideoUrl(url) {
     )
 }
 
-function isAudioUrl(url) {
+function isAudioUrl(
+    url
+) {
     return (
         /\.(mp3|m4a|aac|ogg|wav|opus)(\?|$)/i
             .test(url) ||
@@ -1148,7 +1234,9 @@ function isAudioUrl(url) {
     )
 }
 
-function isImageUrl(url) {
+function isImageUrl(
+    url
+) {
     return (
         /\.(jpg|jpeg|png|webp|gif)(\?|$)/i
             .test(url) ||
@@ -1157,7 +1245,9 @@ function isImageUrl(url) {
     )
 }
 
-function unique(array) {
+function unique(
+    array
+) {
     return [
         ...new Set(
             array.filter(
@@ -1177,7 +1267,10 @@ function sanitizeFileName(
                 ''
             )
             .trim()
-            .slice(0, 100) ||
+            .slice(
+                0,
+                100
+            ) ||
         'spotify'
     )
 }
