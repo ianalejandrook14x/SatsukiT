@@ -39,18 +39,8 @@ export default {
                 )
             }
 
-            const hd =
-                /(?:^|\s)--hd(?:\s|$)/i.test(
-                    input
-                )
-
             const cleanInput =
                 input
-                    .replace(
-                        /(?:^|\s)--hd(?=\s|$)/gi,
-                        ' '
-                    )
-                    .trim()
 
             const urlMatch =
                 cleanInput.match(
@@ -398,8 +388,7 @@ async function sendTikTok(
     conn,
     m,
     data,
-    emoji,
-    hd
+    emoji
 ) {
     const id =
         data?.data?.id ||
@@ -491,27 +480,14 @@ async function sendTikTok(
     const sizeOrg =
         videoDataRef?.size_org
 
-    const sizeHd =
-        videoDataRef?.size_hd
-
     const sizeWm =
         videoDataRef?.size_wm
 
     let sizeInfo = ''
 
-    if (videoDataRef) {
-        if (
-            hd &&
-            sizeHd
-        ) {
-            sizeInfo =
-                `${emoji} ━━ ρᥱso: ${sizeHd} (ʜᴅ)\n`
-        } else if (
-            sizeOrg
-        ) {
-            sizeInfo =
-                `${emoji} ━━ ρᥱso: ${sizeOrg}\n`
-        }
+    if (sizeOrg) {
+        sizeInfo =
+            `${emoji} ━━ ρᥱso: ${sizeOrg}\n`
     }
 
     const caption =
@@ -534,6 +510,16 @@ async function sendTikTok(
 
         `${emoji} ━ mυsιᥴᥲ: ${musicTitle}\n` +
         `${emoji} ━ ᥲυtor: ${musicAuthor}`
+
+    const videoUrl =
+        sizeOrg ||
+        sizeWm
+
+    if (!videoUrl) {
+        throw new Error(
+            'No se encontró el video de TikTok en la respuesta de la API.'
+        )
+    }
 
     await conn.sendMessage(
         m.chat,
