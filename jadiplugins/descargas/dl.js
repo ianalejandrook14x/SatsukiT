@@ -535,19 +535,6 @@ async function sendTikTok(
         `${emoji} ━ mυsιᥴᥲ: ${musicTitle}\n` +
         `${emoji} ━ ᥲυtor: ${musicAuthor}`
 
-    const videoUrl =
-        hd && sizeHd
-            ? sizeHd
-            : sizeOrg ||
-                sizeHd ||
-                sizeWm
-
-    if (!videoUrl) {
-        throw new Error(
-            'No se encontró el video de TikTok en la respuesta de la API.'
-        )
-    }
-
     await conn.sendMessage(
         m.chat,
         {
