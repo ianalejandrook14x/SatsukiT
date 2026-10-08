@@ -39,8 +39,21 @@ export default {
                 )
             }
 
+            const hd =
+                /(?:^|\s)--hd(?:\s|$)/i.test(
+                    input
+                )
+
+            const cleanInput =
+                input
+                    .replace(
+                        /(?:^|\s)--hd(?=\s|$)/gi,
+                        ' '
+                    )
+                    .trim()
+
             const urlMatch =
-                input.match(
+                cleanInput.match(
                     /https?:\/\/[^\s]+/i
                 )
 
@@ -86,14 +99,6 @@ export default {
 
             const apiUrl =
                 `${service.api}?url=${encodeURIComponent(originalUrl)}`
-
-            console.log(
-                `[DL] ${service.name}: ${originalUrl}`
-            )
-
-            console.log(
-                `[DL] API: ${apiUrl}`
-            )
 
             const response =
                 await fetch(
@@ -153,10 +158,6 @@ export default {
                 )
             }
 
-            console.log(
-                '[DL] Respuesta recibida'
-            )
-
             if (
                 data?.status === false ||
                 data?.success === false
@@ -168,27 +169,42 @@ export default {
                 )
             }
 
-            const result =
-                normalizeResult(
-                    data,
-                    service.type
-                )
-
             if (
+                service.type === 'tiktok'
+            ) {
+                await sendTikTok(
+                    conn,
+                    m,
+                    data,
+                    emoji,
+                    hd
+                )
+            } else if (
                 service.type === 'spotify'
             ) {
                 await sendSpotify(
                     conn,
                     m,
-                    result,
+                    data,
+                    botConfig,
                     emoji
                 )
-            } else {
-                await sendSocialMedia(
+            } else if (
+                service.type === 'instagram'
+            ) {
+                await sendInstagram(
                     conn,
                     m,
-                    result,
-                    service.type,
+                    data,
+                    emoji
+                )
+            } else if (
+                service.type === 'facebook'
+            ) {
+                await sendFacebook(
+                    conn,
+                    m,
+                    data,
                     emoji
                 )
             }
@@ -197,10 +213,6 @@ export default {
                 conn,
                 m,
                 '✅'
-            )
-
-            console.log(
-                `[DL] ${service.name}: descarga completada`
             )
 
         } catch (error) {
@@ -382,6 +394,529 @@ async function sendDownloadMenu(
     )
 }
 
+async function sendTikTok(
+    conn,
+    m,
+    data,
+    emoji,
+    hd
+) {
+    const id =
+        data?.data?.id ||
+        data?.id ||
+        'Desconocido'
+
+    const region =
+        data?.data?.region ||
+        data?.region ||
+        'Desconocida'
+
+    const title =
+        data?.data?.title ||
+        data?.title ||
+        'Sin título'
+
+    const authorUsername =
+        data?.data?.author?.username ||
+        data?.author?.username ||
+        'Desconocido'
+
+    const authorNickname =
+        data?.data?.author?.nickname ||
+        data?.author?.nickname ||
+        'Desconocido'
+
+    const durationValue =
+        data?.data?.duration ??
+        data?.duration
+
+    const duration =
+        durationValue !== undefined
+            ? `${durationValue}s`
+            : 'Desconocida'
+
+    const repro =
+        data?.data?.repro ??
+        data?.repro ??
+        '0'
+
+    const like =
+        data?.data?.like ??
+        data?.like ??
+        '0'
+
+    const share =
+        data?.data?.share ??
+        data?.share ??
+        '0'
+
+    const comment =
+        data?.data?.comment ??
+        data?.comment ??
+        '0'
+
+    const download =
+        data?.data?.download ??
+        data?.download ??
+        '0'
+
+    const published =
+        data?.data?.published ||
+        data?.published ||
+        'Desconocida'
+
+    const musicTitle =
+        data?.data?.music?.title ||
+        data?.music?.title ||
+        'Sin información'
+
+    const musicAuthor =
+        data?.data?.music?.author ||
+        data?.music?.author ||
+        'Desconocido'
+
+    const media =
+        Array.isArray(data?.data?.media)
+            ? data.data.media
+            : Array.isArray(data?.media)
+                ? data.media
+                : []
+
+    const videoDataRef =
+        media.find(
+            item =>
+                item?.type === 'video'
+        )
+
+    const sizeOrg =
+        videoDataRef?.size_org
+
+    const sizeHd =
+        videoDataRef?.size_hd
+
+    const sizeWm =
+        videoDataRef?.size_wm
+
+    let sizeInfo = ''
+
+    if (videoDataRef) {
+        if (
+            hd &&
+            sizeHd
+        ) {
+            sizeInfo =
+                `${emoji} ━━ ρᥱso: ${sizeHd} (ʜᴅ)\n`
+        } else if (
+            sizeOrg
+        ) {
+            sizeInfo =
+                `${emoji} ━━ ρᥱso: ${sizeOrg}\n`
+        }
+    }
+
+    const caption =
+        `  ━━━━━━━━━ ᴛɪᴋᴛᴏᴋ ━━━━━━━━━     \n\n` +
+
+        `${emoji} ━ tιtυᥣo: ${title}\n` +
+        `${emoji} ━ ᥴrᥱᥲdor: ${authorNickname} / ${authorUsername}\n` +
+        `${emoji} ━ ιd: ${id}\n` +
+        `${emoji} ━ rᥱgιóᥒ: ${region}\n` +
+        `${emoji} ━ dυrᥲᥴιóᥒ: ${duration}\n` +
+        `${sizeInfo}` +
+        `${emoji} ━ vιstᥲs: ${repro}\n` +
+        `${emoji} ━ ᥣιkᥱs: ${like}\n` +
+        `${emoji} ━ ᥴomρᥲrtιdos: ${share}\n` +
+        `${emoji} ━ ᥴomᥱᥒtᥲrιos: ${comment}\n` +
+        `${emoji} ━ dᥱsᥴᥲrgᥲs: ${download}\n` +
+        `${emoji} ━ ρυbᥣιᥴᥲdo: ${published}\n\n` +
+
+        `✦ ━━━━━━━━ ᴀᴜᴅɪᴏ ━━━━━━━━ ✦\n\n` +
+
+        `${emoji} ━ mυsιᥴᥲ: ${musicTitle}\n` +
+        `${emoji} ━ ᥲυtor: ${musicAuthor}`
+
+    const videoUrl =
+        hd && sizeHd
+            ? sizeHd
+            : sizeOrg ||
+                sizeHd ||
+                sizeWm
+
+    if (!videoUrl) {
+        throw new Error(
+            'No se encontró el video de TikTok en la respuesta de la API.'
+        )
+    }
+
+    await conn.sendMessage(
+        m.chat,
+        {
+            video: {
+                url:
+                    videoUrl
+            },
+
+            caption,
+
+            mimetype:
+                'video/mp4'
+        },
+        {
+            quoted:
+                m
+        }
+    )
+}
+
+async function sendSpotify(
+    conn,
+    m,
+    data,
+    botConfig,
+    emoji
+) {
+    const spotifyData =
+        data?.data ||
+        data
+
+    const title =
+        spotifyData?.title ||
+        'Sin título'
+
+    const author =
+        spotifyData?.author ||
+        'Desconocido'
+
+    const image =
+        spotifyData?.image
+
+    const audio =
+        spotifyData?.download
+
+    if (!image) {
+        throw new Error(
+            'Spotify no devolvió una imagen para el link preview.'
+        )
+    }
+
+    if (!audio) {
+        throw new Error(
+            'Spotify no devolvió el enlace de descarga.'
+        )
+    }
+
+    const name =
+        botConfig?.name ||
+        'tᥱwιᥲᥒιx'
+
+    const previewText =
+        `${emoji} Titulo: ${title}\n` +
+        `${emoji} Autor: ${author}\n` +
+        `${emoji} Socket: ${name}`
+
+    const linkPreview =
+        await createLinkPreview(
+            conn,
+            image,
+            title,
+            author,
+            image
+        )
+
+    if (!linkPreview) {
+        await conn.sendMessage(
+            m.chat,
+            {
+                image: {
+                    url:
+                        image
+                },
+
+                caption:
+                    previewText
+            },
+            {
+                quoted:
+                    m
+            }
+        )
+    } else {
+        await conn.sendMessage(
+            m.chat,
+            {
+                text:
+                    `${image}\n\n${previewText}`,
+
+                linkPreview
+            },
+            {
+                quoted:
+                    m
+            }
+        )
+    }
+
+    await conn.sendMessage(
+        m.chat,
+        {
+            audio: {
+                url:
+                    audio
+            },
+
+            mimetype:
+                'audio/mpeg',
+
+            fileName:
+                `${sanitizeFileName(title)}.mp3`
+        },
+        {
+            quoted:
+                m
+        }
+    )
+}
+
+async function sendInstagram(
+    conn,
+    m,
+    data,
+    emoji
+) {
+    const media =
+        Array.isArray(data?.data)
+            ? data.data
+            : Array.isArray(data)
+                ? data
+                : []
+
+    if (!media.length) {
+        throw new Error(
+            'Instagram no devolvió archivos multimedia.'
+        )
+    }
+
+    const caption =
+        `${emoji} Instagram | DL`
+
+    let sent = false
+
+    for (
+        const item of media
+    ) {
+        if (
+            !item?.url
+        ) {
+            continue
+        }
+
+        if (
+            item.type === 'video'
+        ) {
+            await conn.sendMessage(
+                m.chat,
+                {
+                    video: {
+                        url:
+                            item.url
+                    },
+
+                    caption,
+
+                    mimetype:
+                        'video/mp4'
+                },
+                {
+                    quoted:
+                        m
+                }
+            )
+        } else {
+            await conn.sendMessage(
+                m.chat,
+                {
+                    image: {
+                        url:
+                            item.url
+                    },
+
+                    caption
+                },
+                {
+                    quoted:
+                        m
+                }
+            )
+        }
+
+        sent = true
+    }
+
+    if (!sent) {
+        throw new Error(
+            'Instagram no devolvió una URL multimedia válida.'
+        )
+    }
+}
+
+async function sendFacebook(
+    conn,
+    m,
+    data,
+    emoji
+) {
+    const list =
+        Array.isArray(data?.list)
+            ? data.list
+            : []
+
+    const video =
+        list.find(
+            item =>
+                typeof item?.url === 'string' &&
+                item.url.trim()
+        )
+
+    if (!video?.url) {
+        throw new Error(
+            'Facebook no devolvió un enlace de descarga.'
+        )
+    }
+
+    const caption =
+        `${emoji} Facebook | DL`
+
+    await conn.sendMessage(
+        m.chat,
+        {
+            video: {
+                url:
+                    video.url
+            },
+
+            caption,
+
+            mimetype:
+                'video/mp4'
+        },
+        {
+            quoted:
+                m
+        }
+    )
+}
+
+async function createLinkPreview(
+    conn,
+    previewImage,
+    title,
+    description,
+    canonicalUrl
+) {
+    try {
+        const imageResponse =
+            await fetch(
+                previewImage,
+                {
+                    signal:
+                        AbortSignal.timeout(
+                            15000
+                        )
+                }
+            )
+
+        if (!imageResponse.ok) {
+            throw new Error(
+                `HTTP ${imageResponse.status}`
+            )
+        }
+
+        const originalBuffer =
+            Buffer.from(
+                await imageResponse.arrayBuffer()
+            )
+
+        const thumbnailBuffer =
+            await sharp(
+                originalBuffer
+            )
+                .resize(
+                    1280,
+                    720,
+                    {
+                        fit: 'cover',
+                        position: 'center'
+                    }
+                )
+                .jpeg({
+                    quality: 90
+                })
+                .toBuffer()
+
+        const { imageMessage } =
+            await prepareWAMessageMedia(
+                {
+                    image:
+                        thumbnailBuffer
+                },
+                {
+                    upload:
+                        conn.waUploadToServer,
+
+                    mediaTypeOverride:
+                        'thumbnail-link'
+                }
+            )
+
+        if (imageMessage) {
+            imageMessage.width =
+                1280
+
+            imageMessage.height =
+                720
+        }
+
+        return {
+            'canonical-url':
+                canonicalUrl,
+
+            'matched-text':
+                canonicalUrl,
+
+            title:
+                title,
+
+            description:
+                description,
+
+            previewType:
+                0,
+
+            jpegThumbnail:
+                thumbnailBuffer,
+
+            highQualityThumbnail:
+                imageMessage,
+
+            linkPreviewMetadata: {
+                linkMediaDuration:
+                    0,
+
+                socialMediaPostType:
+                    4
+            }
+        }
+
+    } catch (error) {
+        console.error(
+            '[DL LINK PREVIEW]',
+            error
+        )
+
+        return null
+    }
+}
+
 async function react(
     conn,
     m,
@@ -509,759 +1044,11 @@ function detectService(
     return null
 }
 
-function normalizeResult(
-    data,
-    type
-) {
-    const urls = []
-    const images = []
-    const audios = []
-    const videos = []
-
-    collectValues(
-        data,
-        urls,
-        images,
-        audios,
-        videos
-    )
-
-    const title =
-        firstValue(
-            data,
-            [
-                'title',
-                'name',
-                'track',
-                'caption',
-                'description'
-            ]
-        )
-
-    const author =
-        firstValue(
-            data,
-            [
-                'author',
-                'artist',
-                'username',
-                'uploader',
-                'creator'
-            ]
-        )
-
-    const image =
-        firstValue(
-            data,
-            [
-                'image',
-                'img',
-                'thumbnail',
-                'thumb',
-                'cover',
-                'cover_url',
-                'coverUrl',
-                'artwork'
-            ]
-        ) ||
-        images[0] ||
-        ''
-
-    if (
-        type === 'facebook' &&
-        Array.isArray(
-            data?.list
-        )
-    ) {
-        for (
-            const item of
-                data.list
-        ) {
-            if (
-                typeof item?.url ===
-                'string' &&
-                isUrl(item.url)
-            ) {
-                videos.push(
-                    item.url
-                )
-            }
-        }
-    }
-
-    if (
-        type === 'spotify'
-    ) {
-        const spotifyAudio =
-            findMediaByKeys(
-                data,
-                [
-                    'download',
-                    'downloadUrl',
-                    'download_url',
-                    'audio',
-                    'audioUrl',
-                    'audio_url',
-                    'music',
-                    'musicUrl',
-                    'music_url'
-                ]
-            )
-
-        if (spotifyAudio) {
-            audios.unshift(
-                spotifyAudio
-            )
-        }
-    }
-
-    return {
-        raw:
-            data,
-
-        urls:
-            unique(urls),
-
-        images:
-            unique(images),
-
-        audios:
-            unique(audios),
-
-        videos:
-            unique(videos),
-
-        image:
-            image,
-
-        title:
-            title || '',
-
-        author:
-            author || ''
-    }
-}
-
-async function sendSpotify(
-    conn,
-    m,
-    result,
-    emoji
-) {
-    const title =
-        result.title ||
-        'Spotify'
-
-    const author =
-        result.author ||
-        ''
-
-    const caption =
-        `${emoji} ${title}` +
-        (
-            author
-                ? `\n${author}`
-                : ''
-        )
-
-    if (result.image) {
-        await conn.sendMessage(
-            m.chat,
-            {
-                image: {
-                    url:
-                        result.image
-                },
-                caption
-            },
-            {
-                quoted:
-                    m
-            }
-        )
-    }
-
-    const audio =
-        result.audios[0] ||
-        findMediaByKeys(
-            result.raw,
-            [
-                'download',
-                'downloadUrl',
-                'download_url',
-                'audio',
-                'audioUrl',
-                'audio_url',
-                'music',
-                'musicUrl',
-                'music_url',
-                'url'
-            ]
-        )
-
-    if (!audio) {
-        throw new Error(
-            'No se encontró el audio en la respuesta de Spotify.'
-        )
-    }
-
-    await conn.sendMessage(
-        m.chat,
-        {
-            audio: {
-                url:
-                    audio
-            },
-
-            mimetype:
-                'audio/mpeg',
-
-            fileName:
-                `${sanitizeFileName(title)}.mp3`
-        },
-        {
-            quoted:
-                m
-        }
-    )
-}
-
-async function sendSocialMedia(
-    conn,
-    m,
-    result,
-    type,
-    emoji
-) {
-    const caption =
-        buildCaption(
-            result,
-            type,
-            emoji
-        )
-
-    const videos =
-        unique(
-            result.videos
-        )
-
-    if (
-        videos.length > 0
-    ) {
-        for (
-            const video of
-                videos
-        ) {
-            await conn.sendMessage(
-                m.chat,
-                {
-                    video: {
-                        url:
-                            video
-                    },
-
-                    caption,
-
-                    mimetype:
-                        'video/mp4'
-                },
-                {
-                    quoted:
-                        m
-                }
-            )
-        }
-
-        return
-    }
-
-    const video =
-        findMediaByKeys(
-            result.raw,
-            [
-                'video',
-                'videoUrl',
-                'video_url',
-                'play',
-                'playUrl',
-                'play_url',
-                'hdplay',
-                'hdPlay',
-                'download',
-                'downloadUrl',
-                'download_url'
-            ]
-        )
-
-    if (video) {
-        await conn.sendMessage(
-            m.chat,
-            {
-                video: {
-                    url:
-                        video
-                },
-
-                caption,
-
-                mimetype:
-                    'video/mp4'
-            },
-            {
-                quoted:
-                    m
-            }
-        )
-
-        return
-    }
-
-    const image =
-        result.image ||
-        result.images[0]
-
-    if (image) {
-        await conn.sendMessage(
-            m.chat,
-            {
-                image: {
-                    url:
-                        image
-                },
-
-                caption
-            },
-            {
-                quoted:
-                    m
-            }
-        )
-
-        return
-    }
-
-    const generic =
-        result.urls.find(
-            url =>
-                isVideoUrl(url)
-        )
-
-    if (generic) {
-        await conn.sendMessage(
-            m.chat,
-            {
-                video: {
-                    url:
-                        generic
-                },
-
-                caption,
-
-                mimetype:
-                    'video/mp4'
-            },
-            {
-                quoted:
-                    m
-            }
-        )
-
-        return
-    }
-
-    throw new Error(
-        'No se encontro archivo multimedia en la respuesta de la API.'
-    )
-}
-
-function buildCaption(
-    result,
-    type,
-    emoji
-) {
-    const service =
-        type === 'tiktok'
-            ? 'TikTok'
-            : type === 'instagram'
-                ? 'Instagram'
-                : 'Facebook'
-
-    let caption =
-        `${emoji} ${service}`
-
-    if (result.title) {
-        caption +=
-            `\n\n${result.title}`
-    }
-
-    if (result.author) {
-        caption +=
-            `\n${result.author}`
-    }
-
-    return caption
-}
-
-function collectValues(
-    value,
-    urls,
-    images,
-    audios,
-    videos,
-    key = ''
-) {
-    if (!value) {
-        return
-    }
-
-    if (
-        typeof value ===
-        'string'
-    ) {
-        if (isUrl(value)) {
-            urls.push(
-                value
-            )
-
-            const lower =
-                key.toLowerCase()
-
-            if (
-                isImageUrl(value) ||
-                lower.includes(
-                    'image'
-                ) ||
-                lower.includes(
-                    'thumb'
-                ) ||
-                lower.includes(
-                    'cover'
-                ) ||
-                lower.includes(
-                    'thumbnail'
-                )
-            ) {
-                images.push(
-                    value
-                )
-            }
-
-            if (
-                isAudioUrl(value) ||
-                lower.includes(
-                    'audio'
-                ) ||
-                lower.includes(
-                    'music'
-                )
-            ) {
-                audios.push(
-                    value
-                )
-            }
-
-            if (
-                isVideoUrl(value) ||
-                lower.includes(
-                    'video'
-                ) ||
-                lower.includes(
-                    'play'
-                )
-            ) {
-                videos.push(
-                    value
-                )
-            }
-        }
-
-        return
-    }
-
-    if (
-        Array.isArray(value)
-    ) {
-        for (
-            const item of
-                value
-        ) {
-            collectValues(
-                item,
-                urls,
-                images,
-                audios,
-                videos,
-                key
-            )
-        }
-
-        return
-    }
-
-    if (
-        typeof value ===
-        'object'
-    ) {
-        for (
-            const [
-                childKey,
-                childValue
-            ] of Object.entries(
-                value
-            )
-        ) {
-            collectValues(
-                childValue,
-                urls,
-                images,
-                audios,
-                videos,
-                childKey
-            )
-        }
-    }
-}
-
-function findMediaByKeys(
-    object,
-    keys
-) {
-    if (!object) {
-        return ''
-    }
-
-    if (
-        typeof object ===
-        'string'
-    ) {
-        return isUrl(object)
-            ? object
-            : ''
-    }
-
-    if (
-        Array.isArray(object)
-    ) {
-        for (
-            const item of
-                object
-        ) {
-            const found =
-                findMediaByKeys(
-                    item,
-                    keys
-                )
-
-            if (found) {
-                return found
-            }
-        }
-
-        return ''
-    }
-
-    if (
-        typeof object !==
-        'object'
-    ) {
-        return ''
-    }
-
-    for (
-        const key of
-            keys
-    ) {
-        const value =
-            object[key]
-
-        if (
-            typeof value ===
-                'string' &&
-            isUrl(value)
-        ) {
-            return value
-        }
-    }
-
-    for (
-        const value of
-            Object.values(
-                object
-            )
-    ) {
-        const found =
-            findMediaByKeys(
-                value,
-                keys
-            )
-
-        if (found) {
-            return found
-        }
-    }
-
-    return ''
-}
-
-function firstValue(
-    object,
-    keys
-) {
-    if (!object) {
-        return ''
-    }
-
-    if (
-        typeof object ===
-        'string'
-    ) {
-        return object
-    }
-
-    if (
-        Array.isArray(object)
-    ) {
-        for (
-            const item of
-                object
-        ) {
-            const found =
-                firstValue(
-                    item,
-                    keys
-                )
-
-            if (found) {
-                return found
-            }
-        }
-
-        return ''
-    }
-
-    if (
-        typeof object !==
-        'object'
-    ) {
-        return ''
-    }
-
-    for (
-        const key of
-            keys
-    ) {
-        const value =
-            object[key]
-
-        if (
-            typeof value ===
-                'string' &&
-            value.trim()
-        ) {
-            return value
-        }
-
-        if (
-            value &&
-            typeof value ===
-                'object'
-        ) {
-            const found =
-                firstValue(
-                    value,
-                    keys
-                )
-
-            if (found) {
-                return found
-            }
-        }
-    }
-
-    for (
-        const value of
-            Object.values(
-                object
-            )
-    ) {
-        if (
-            value &&
-            typeof value ===
-                'object'
-        ) {
-            const found =
-                firstValue(
-                    value,
-                    keys
-                )
-
-            if (found) {
-                return found
-            }
-        }
-    }
-
-    return ''
-}
-
-function isUrl(
-    value
-) {
-    return /^https?:\/\/\S+$/i.test(
-        value
-    )
-}
-
-function isVideoUrl(
-    url
-) {
-    return (
-        /\.(mp4|m4v|mov|webm)(\?|$)/i
-            .test(url) ||
-        /\/video\b|\/v2\b|video_url|videoUrl/i
-            .test(url)
-    )
-}
-
-function isAudioUrl(
-    url
-) {
-    return (
-        /\.(mp3|m4a|aac|ogg|wav|opus)(\?|$)/i
-            .test(url) ||
-        /\/audio\b|audio_url|audioUrl/i
-            .test(url)
-    )
-}
-
-function isImageUrl(
-    url
-) {
-    return (
-        /\.(jpg|jpeg|png|webp|gif)(\?|$)/i
-            .test(url) ||
-        /\/image\b|\/thumb\b|\/thumbnail\b|\/cover\b/i
-            .test(url)
-    )
-}
-
-function unique(
-    array
-) {
-    return [
-        ...new Set(
-            array.filter(
-                Boolean
-            )
-        )
-    ]
-}
-
 function sanitizeFileName(
     name
 ) {
     return (
-        name
+        String(name)
             .replace(
                 /[<>:"/\\|?*\x00-\x1F]/g,
                 ''
