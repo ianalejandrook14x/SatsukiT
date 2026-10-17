@@ -1,5 +1,5 @@
 
-import { downloadContentFromMessage } from '@whiskeysockets/baileys';
+import { downloadContentFromMessage } from '@itsliaaa/baileys';
 
 async function streamToBuffer(stream) {
   const chunks = [];
